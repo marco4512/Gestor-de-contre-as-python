@@ -1,0 +1,44 @@
+{
+   "0": {
+      "marco": {
+         "password": "321",
+         "servicios": [
+            {
+               "usuario": "King_Man",
+               "password": "123456",
+               "NombreServicio": "Facebook"
+            }
+         ]
+      }
+   },
+   "1": {
+      "jose": {
+         "password": "321",
+         "servicios": []
+      }
+   },
+   "2": {
+      "pablo": {
+         "password": "123",
+         "servicios": [
+            {
+               "usuario": "Pablon",
+               "password": "32132132",
+               "NombreServicio": "Instagram"
+            }
+         ]
+      }
+   },
+   "3": {
+      "karla": {
+         "password": "321",
+         "servicios": []
+      }
+   },
+   "4": {
+      "Carlos": {
+         "password": "321",
+         "servicios": []
+      }
+   }
+}
