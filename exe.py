@@ -1,14 +1,89 @@
 import json
+import hashlib
 import ast
 from pydoc import doc
 from classes import *
 from os import system
 import getpass
 from colorama import Fore, init
+import base64
+import os
+from cryptography.fernet import Fernet
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from tqdm import *
+key=''
 '''
 Instanciamos el objeto doc que nos servira para acceder
 a los metodos de esta clase
 '''
+lista_de_servicios=[]
+def generar_key(password_encrip):
+    password = bytes(password_encrip,encoding = "utf-8")
+    salt = password
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA512(),
+        length=32,
+        salt=salt,
+        iterations=390000,
+    )
+    key = base64.urlsafe_b64encode(kdf.derive(password))
+    #print('llave encriptado',key,type(key))
+    return(key)
+def cargar_servicios(user_name,password):
+    print(Fore.GREEN,'Cargado Datos')
+    id=numero_de_cuenta(user_name)
+    lista=[]
+    for x in tqdm(cuentas[id][user_name]['servicios']):
+        ser=des(password,x['NombreServicio'])
+        ser=de_bin_a_string(ser)
+        pas=des(password,x['password'])
+        pas=de_bin_a_string(pas)
+        usr=des(password,x['usuario'])
+        usr=de_bin_a_string(usr)
+        if ([usr,pas,ser] not in lista_de_servicios):
+            lista_de_servicios.append([usr,pas,ser])
+def re_ecrip_contreña(new_password):
+    new_service_encripted=[]
+    new_password=has(new_password)
+    print('Actualizando datos..')
+    for x in lista_de_servicios:
+        dic_temp={
+            'usuario':str(encript(new_password,x[0])),
+            'password':str(encript(new_password,x[1])),
+            'NombreServicio':str(encript(new_password,x[2]))
+        }
+        new_service_encripted.append(dic_temp)
+    
+    return(new_service_encripted)
+
+    pass
+
+
+def de_bin_a_string(bin):
+    bin=str(bin).replace("b'","")
+    bin=bin[:len(bin)-1]
+    return bin
+
+def encript(password_cript,value):
+    key=generar_key(password_cript)
+    f = Fernet(key)
+    values=bytes(value,encoding = "utf-8")
+    token = f.encrypt(values)
+    return token
+def des(password_cript,valor):
+    valor= valor.replace("b'",'')
+    valor=valor[:len(valor)-1]
+    valor=bytes(valor,encoding='utf-8')
+    #print(type(valor),'___',valor)
+    key=generar_key(password_cript)
+    #print('recibiendo llave :',key)
+    f = Fernet(key)
+    token = f.decrypt(valor)
+    return token
+
+
+
 
 doc=Documento('/home/marco/Escritorio/Seguridad en las aplicaciones de software/CRUD/files/jsons.txt')
 
@@ -118,6 +193,9 @@ def registro(cuentas):
 
         existe_o_no=ya_existe_el_nombre(nombre)
         if(existe_o_no==False):
+            password=str(has(password))
+            key=str(has2(password))
+            #usuario=str(has2(usuario))
             usuario=User(nombre,password,cuentas)
             usuario.crear_nuevo_usuario()
             system('clear')
@@ -232,6 +310,7 @@ def login_2(aux):
             '''
 
             password=getpass.getpass("Ingresa tu contraseña: ")
+            password=has(password)
             
             '''
             Verificamos que el usario exista en nuestro txt,
@@ -273,7 +352,8 @@ def login_2(aux):
                     '''
                     En caso de ser cierto se cierra el ciclo
                     y se retorna un TRue mas el usuario para futuras funciones'''
-
+                    cargar_servicios(usuario,password)
+                    print(lista_de_servicios)
                     salida=False
                     return True,usuario
 
@@ -530,16 +610,16 @@ def editar_registros(mega_dic,cuentas,usuario,indice):
         como primera instancia se necesita que el usuario ingrese la nueva
         contreña
         '''
-
         nueva=input(f'{Fore.RED}Ingresa la nueva contraseña: ')
-        
+        lista_nueva=re_ecrip_contreña(nueva)
+        nueva=has(nueva)
         '''
         Se remplaza la contraseña vieja con la contraseña nueva
         en el arreglo temporal
         '''
-
         cuentas[indice][usuario]['password']=nueva
-        
+        cuentas[indice][usuario]['servicios']=lista_nueva
+        acualizar_dic(cuentas)
         '''
         Se genera el json y guarda en el txt
         '''
@@ -593,8 +673,8 @@ def editar_registros(mega_dic,cuentas,usuario,indice):
                     Impresion de los servicios
                     '''
 
-                    for i,x in enumerate(cuentas[indice][usuario]['servicios']):
-                        print(f'[{i}] {x}')
+                    for i,x in enumerate(lista_de_servicios):
+                        print(f'[{i}] Usuario:\t{x[0]}| Password:\t{x[1]}| Servicio: {x[2]}|')
                     
                     print(f'''{Fore.GREEN}
                     Selecciona el servicio a editar''' )
@@ -610,9 +690,10 @@ def editar_registros(mega_dic,cuentas,usuario,indice):
                     '''
                     Se imprime el servicio seleccionado
                     '''
-                   
+                    seleccioando=f'[{int(op)}] Usuario:\t{lista_de_servicios[int(op)][0]}| Password:\t{lista_de_servicios[int(op)][1]}| Servicio: {lista_de_servicios[int(op)][2]}|'
                     print(f'''Servicio seleccionado
-                    {Fore.RED}{cuentas[indice][usuario]['servicios'][int(op)]}''')
+                    {Fore.RED}{seleccioando}
+                    ''')
                     
                     '''
                     Se rompe el ciclo
@@ -663,18 +744,19 @@ def editar_registros(mega_dic,cuentas,usuario,indice):
             4 entrara en todos los if, sustituyendo los valores
             viejos con los ingresados por el usuario
             '''
-
             usuario_old=cuentas[indice][usuario]['servicios'][int(op)]['usuario']
             password_old=cuentas[indice][usuario]['servicios'][int(op)]['password']
             NombreServicio_old=cuentas[indice][usuario]['servicios'][int(op)]['NombreServicio']
 
             if (el=='1' or el=='4'):
                 usuario_old=input('Ingresa el nuevo usuario :')
+                usuario_old=str(encript(cuentas[indice][usuario]['password'],usuario_old))
             if(el=='2'or el=='4'):
                 password_old=input('Ingresa la nueva contraseña: ')
+                password_old=str(encript(cuentas[indice][usuario]['password'],password_old))
             if(el=='3' or el=='4'):
                 NombreServicio_old=input('Ingresa el nombre del servicio: ')
-            
+                NombreServicio_old=str(encript(cuentas[indice][usuario]['password'],NombreServicio_old))
             '''
             Se genera el nuevo diccionario
             con todos los elementos
@@ -690,7 +772,6 @@ def editar_registros(mega_dic,cuentas,usuario,indice):
             '''
             Se anexa al arreglo temporal para hacer el cambio
             '''
-
             cuentas[indice][usuario]['servicios'][int(op)]=nuev
             acualizar_dic(cuentas)
             
@@ -698,8 +779,9 @@ def editar_registros(mega_dic,cuentas,usuario,indice):
             se actualiza y se muestra el servicio modificado
             y a su vez se rescribe el documento
             '''
-
-            print(cuentas[indice][usuario]['servicios'][int(op)])
+            lista_de_servicios.pop(indice)
+            cargar_servicios(usuario,cuentas[indice][usuario]['password'])
+            print(f'[{int(op)}] Usuario:\t{lista_de_servicios[int(op)][0]}| Password:\t{lista_de_servicios[int(op)][1]}| Servicio: {lista_de_servicios[int(op)][2]}|')
             json_data = json.dumps(mega_dic,indent=3)
             doc.escribir_json(str(json_data))
         else:
@@ -741,16 +823,21 @@ def opciones_del_menu(nombre_usuario,op,mega_dic,cuentas,indice_aux):
         nombre_servicio=input(f"Nombre del {Fore.RED}SERVICIO: {Fore.GREEN} ")
         password=input(f"Ingresa su {Fore.RED}PASSWORD: {Fore.GREEN}")
         nuevo_usuario=input(f"Ingresa el {Fore.RED}USUARIO: {Fore.GREEN}")
+        nombre_servicio=str(encript(cuentas[indice_aux][nombre_usuario]['password'],str(nombre_servicio)))
+        password=str(encript(cuentas[indice_aux][nombre_usuario]['password'],str(password)))
+        nuevo_usuario=str(encript(cuentas[indice_aux][nombre_usuario]['password'],str(nuevo_usuario)))
+        '''
+        password=str(has2(password))
+        nuevo_usuario=str(has2(nuevo_usuario))'''
         
         '''
         se genera el objeto servicio el cual
         nos servira para generar un diccionario
         con esos datos en particular
         '''
-        
         servicio=Servicio(nombre_usuario,password,nombre_servicio,cuentas)
         servicio.crear_servicio_nuevo(indice_aux,nuevo_usuario)
-        
+        cargar_servicios(nombre_usuario,cuentas[indice_aux][nombre_usuario]['password'])
         '''
         Se crea el json y se escribe en el txt
         '''
@@ -780,15 +867,16 @@ def opciones_del_menu(nombre_usuario,op,mega_dic,cuentas,indice_aux):
             '''
             Se imprime los servicios que tiene el usuario
             '''
-
-            for i,servicios in enumerate(cuentas[indice_aux][nombre_usuario]['servicios']):
-                print(f"[{i}]|USUARIO:\t{servicios['usuario']}\t|SERVICIO:\t{servicios['NombreServicio']}\t|PASSWORD:\t{servicios['password']}\t|")
+            for i,servicios in enumerate(lista_de_servicios):
+                '''print('servicio encriptado',servicios['NombreServicio'])
+                print('Contraseña usuario',cuentas[indice_aux][nombre_usuario]['password'])
+                '''
+                print(f"[{i}]|USUARIO:\t{servicios[0]}\t|SERVICIO:\t{servicios[2]}\t|PASSWORD:\t{servicios[1]}\t|")
            
             '''
             Se entra en un ciclo que obliga al usuario
             a ingresar una opcion de servicio correcta
             '''
-           
             while True:
                 try:
 
@@ -798,11 +886,10 @@ def opciones_del_menu(nombre_usuario,op,mega_dic,cuentas,indice_aux):
                     entonces se pide una confirmacion para
                     eliminarlo
                     '''
-
                     indice_a_borrar=int(input(">> "))
-                    aux=cuentas[indice_aux][nombre_usuario]['servicios'][indice_a_borrar]
+                    aux=lista_de_servicios[indice_a_borrar]
                     print('*'*20,'¿Seguro deseas borrar?','*'*20)
-                    print(f"[{indice_a_borrar}]|USUARIO:\t{aux['usuario']}\t|SERVICIO:\t{aux['NombreServicio']}\t|PASSWORD:\t{aux['password']}\t|")
+                    print(aux)
                     break
                 except :
                     
@@ -829,6 +916,8 @@ def opciones_del_menu(nombre_usuario,op,mega_dic,cuentas,indice_aux):
                 cuentas[indice_aux][nombre_usuario]['servicios'].pop(indice_a_borrar)
                 json_data = json.dumps(mega_dic,indent=3)
                 doc.escribir_json(str(json_data))
+                lista_de_servicios.pop(indice_a_borrar)
+                
             else:
                 print('*'*20,'Borrado cancelado','*'*20)
             system('clear')
@@ -838,14 +927,11 @@ def opciones_del_menu(nombre_usuario,op,mega_dic,cuentas,indice_aux):
             return True
 
     if(op=='3'):
-        
         '''
         SI se desea editar un registro se manda a 
         llamar esta opcion
         '''
-
         editar_registros(mega_dic,cuentas,nombre_usuario,indice_aux)
-      
         return True
 
 def menu_usuario(usuario):
@@ -923,7 +1009,14 @@ def menu_usuario(usuario):
             print(Fore.RED,'Gracias',Fore.GREEN)
             cons=False
             break
-
+def has(m):
+    mensaje=m  
+    m=hashlib.sha256(mensaje.encode())
+    return(m.hexdigest())
+def has2(m):
+    mensaje=m  
+    m=hashlib.sha512(mensaje.encode())
+    return(m.hexdigest())
 
 '''
 Al inciar el programa se 
@@ -943,49 +1036,48 @@ a un primer recorrido de esta
 recibiendo como regreso un estado y
 el nombre del usuario
 '''
-
-estado,user_name=login_2(0)
-
-'''
-se pregunta si la respuesta
-de regreso de la primera 
-interaccion con el login
-es true o registrado
-'''
-
-if estado =='Registrado':
+try:
+    estado,user_name=login_2(0)
 
     '''
-    En caso de que si sea registrado,
-    nos indica que ya se registro este
-    en el primer login por lo que llamaremos 
-    de nuevo a login para asi entrar directo
-    al login sin salir del programa
+    se pregunta si la respuesta
+    de regreso de la primera 
+    interaccion con el login
+    es true o registrado
     '''
 
-    estado2,user_name=login_2('1')
-    
-    '''
-    se vuelve a hacer una condicion que 
-    si es verdadera entra directo a la funcion de
-    menu
-    '''
+    if estado =='Registrado':
 
-    if(estado2):
-        system('clear')
+        '''
+        En caso de que si sea registrado,
+        nos indica que ya se registro este
+        en el primer login por lo que llamaremos 
+        de nuevo a login para asi entrar directo
+        al login sin salir del programa
+        '''
+
+        estado2,user_name=login_2('1')
         
         '''
-        Se llama a la funcion menu
+        se vuelve a hacer una condicion que 
+        si es verdadera entra directo a la funcion de
+        menu
         '''
+        if(estado2):
+            system('clear')
+            '''
+            Se llama a la funcion menu
+            '''
 
+            menu_usuario(user_name)
+    elif(estado):
+        system('clear')
+        '''
+        Si se logio correctamente
+        se va directo al menu
+        '''
         menu_usuario(user_name)
-elif(estado):
-    system('clear')
-
-    '''
-    Si se logio correctamente
-    se va directo al menu
-    '''
-    
-    menu_usuario(user_name)
+except Exception as e:
+    print(e)
+    print('Sucedio un error, reinicia el programa')
 
